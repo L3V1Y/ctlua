@@ -1,4 +1,4 @@
-local ffi = require 'ffi'
+
 local request = require 'gamesense/http'
 
 
@@ -350,44 +350,6 @@ log.add                = function(text, r, g, b, a)
     table.insert(logs, 1, { text = text, r1 = r, g1 = g, b1 = b, a1 = a, alpha = 0, time = globals.curtime() + 4 })
 end
 local helpers          = {
-    get_hwid = function()
-        material_system = client.create_interface('materialsystem.dll', 'VMaterialSystem080')
-        material_interface = ffi.cast('void***', material_system)[0]
-
-        get_current_adapter = ffi.cast('get_current_adapter_fn', material_interface[25])
-        get_adapter_info = ffi.cast('get_adapters_info_fn', material_interface[26])
-
-        current_adapter = get_current_adapter(material_interface)
-
-        adapter_struct = ffi.new('struct mask')
-        get_adapter_info(material_interface, current_adapter, adapter_struct)
-
-        driverName = tostring(ffi.string(adapter_struct['m_pDriverName']))
-        vendorId = tostring(adapter_struct['m_VendorID'])
-        deviceId = tostring(adapter_struct['m_DeviceID'])
-        class_ptr = ffi.typeof("void***")
-        rawfilesystem = client.create_interface("filesystem_stdio.dll", "VBaseFileSystem011")
-        filesystem = ffi.cast(class_ptr, rawfilesystem)
-        file_exists = ffi.cast("file_exists_t", filesystem[0][10])
-        get_file_time = ffi.cast("get_file_time_t", filesystem[0][13])
-
-        function bruteforce_directory()
-            for i = 65, 90 do
-                directory = string.char(i) .. ":\\Windows\\Setup\\State\\State.ini"
-
-                if (file_exists(filesystem, directory, "ROOT")) then
-                    return directory
-                end
-            end
-            return nil
-        end
-
-        directory = bruteforce_directory()
-        install_time = get_file_time(filesystem, directory, "ROOT")
-        hardwareID = install_time * 2
-        m_id = ((vendorId * deviceId) * 2) + hardwareID
-        return m_id
-    end,
     last_sim_time = 0,
     defensive_until = 0,
 
