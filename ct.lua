@@ -1,371 +1,1153 @@
-utils.print_dev_console("🞄cyber.technology🞄")
-utils.print_dev_console("🞄recoded version🞄")
---ну чё начинаем - обозначение функций типо чекбокс итд
-local cb = gui.add_checkbox
-local sl = gui.add_slider
-local cmb = gui.add_combo
-local mc = gui.add_multi_combo
-local btn = gui.add_button
-local txt = gui.add_textbox
-local lb = gui.add_listbox
-local kb = gui.add_keybind
-local cp = gui.add_colorpicker
-local find = gui.get_config_item
-local error = utils.error_print
+local ffi = require 'ffi'
+local request = require 'gamesense/http'
 
---начало скрипта
---рагубоб (мейн)
-local menu = cmb("cyber.technology recode", "lua>tab a", {"Main", "Anti-Aim", "Visual features", "Misc"})
-local da = cb("Dormant on key", "lua>tab b")
-local dakb = kb("lua>tab b>Dormant on key")
-local osf = cb("OS-AA fix", "lua>tab b")
-local os = cmb("OS-AA", "lua>tab b", {"Firerate", "Lagcomp break", "Full fakelag"})
-local sfix = cb("Scout fix (maybe)", "lua>tab b")
---аашки
-local rjt = cb("Random jitter", "lua>tab b")
-local rjt1 = sl("Random jitter 1", "lua>tab b", -360, 360, 0)
-local rjt2 = sl("Random jitter 2", "lua>tab b", -360, 360, 0)
-local rjc = cb("Random desync comp", "lua>tab b")
-local rjc1 = sl("Random desync comp 1", "lua>tab b", 0, 100, 0)
-local rjc2 = sl("Random desync comp 2", "lua>tab b", 0, 100, 0)
-local rdj = cb("Random desync", "lua>tab b")
-local rdj1 = sl("Random desync 1", "lua>tab b", -100, 100, 0)
-local rdj2 = sl("Random desync 2", "lua>tab b", -100, 100, 0)
---визуалы индикаторы итд
-local visual = cb("Indicators", "lua>tab b")
-local visualm = cmb("Indicator selection", "lua>tab b", {"-", "Pixel", "Re-newed"})
-local watermark = cb("Side watermark", "lua>tab b")
-local cn = cb("Custom Watermark name", "lua>tab b")
-local name = txt("Name", "lua>tab b")
---миски
-local sm = cb("Static on manual", "lua>tab b")
-local rl = cb("Ragebot logs", "lua>tab b")
-local tag = cb("Clantag", "lua>tab b")
 
-function MenuElements()
-   local tab = menu:get_int()
-   local ryjc = rjt:get_bool()
-   local rjcc = rjc:get_bool()
-   local rdjc = rdj:get_bool()
-   local osc = osf:get_bool()
-   local indc = visual:get_bool()
-   local cnc = cn:get_bool()
-   gui.set_visible("lua>tab b>Dormant on key", tab == 0);
-   gui.set_visible("lua>tab b>OS-AA fix", tab == 0);
-   gui.set_visible("lua>tab b>OS-AA", tab == 0 and osc);
-   gui.set_visible("lua>tab b>Scout fix (maybe)", tab == 0);
-   gui.set_visible("lua>tab b>Random jitter", tab == 1)
-   gui.set_visible("lua>tab b>Random jitter 1", tab == 1 and ryjc)
-   gui.set_visible("lua>tab b>Random jitter 2", tab == 1 and ryjc)
-   gui.set_visible("lua>tab b>Random desync comp", tab == 1)
-   gui.set_visible("lua>tab b>Random desync comp 1", tab == 1 and rjcc)
-   gui.set_visible("lua>tab b>Random desync comp 2", tab == 1 and rjcc)
-   gui.set_visible("lua>tab b>Random desync", tab == 1)
-   gui.set_visible("lua>tab b>Random desync 1", tab == 1 and rdjc)
-   gui.set_visible("lua>tab b>Random desync 2", tab == 1 and rdjc)
-   gui.set_visible("lua>tab b>Indicators", tab == 2)
-   gui.set_visible("lua>tab b>Indicator selection", tab == 2 and indc)
-   gui.set_visible("lua>tab b>Side watermark", tab == 2)
-   gui.set_visible("lua>tab b>Custom Watermark name", tab == 2)
-   gui.set_visible("lua>tab b>Name", tab == 2 and cnc)
-   gui.set_visible("lua>tab b>Static on manual", tab == 3);
-   gui.set_visible("lua>tab b>Ragebot logs", tab == 3);
-   gui.set_visible("lua>tab b>Clantag", tab == 3);
+
+
+
+
+
+
+local function lerp(x, v, t)
+    if type(x) == 'table' then
+        return lerp(x[1], v[1], t), lerp(x[2], v[2], t), lerp(x[3], v[3], t), lerp(x[4], v[4], t)
+    end
+
+    local delta = v - x
+
+    if type(delta) == 'number' then
+        if math.abs(delta) < 0.005 then
+            return v
+        end
+    end
+
+    return delta * t + x
 end
 
 
-local hs = gui.get_config_item("Rage>Aimbot>Aimbot>Hide shot")
-local dt = gui.get_config_item("Rage>Aimbot>Aimbot>Double tap")
-local limit = gui.get_config_item("Rage>Anti-Aim>Fakelag>Limit")
-local desynccache = gui.get_config_item("Rage>Anti-Aim>Desync>Fake amount")
-local cacache = gui.get_config_item("Rage>Anti-Aim>Desync>Compensate angle")
-local jitcache = gui.get_config_item("Rage>Anti-Aim>Angles>Jitter range")
--- cache fakelag limit
-local cache = {
-  backup = limit:get_int(),
-  override = false,
-}
-  
-local aacache = {
-    backup = desynccache:get_int(),
-    override = false,
-  }  
-  local compcache = {
-    backup = cacache:get_int(),
-    override = false,
-  }  
-  local jtcache = {
-    backup = jitcache:get_int(),
-    override = false,
-  }  
-function randomdesync()
-    if rdj:get_bool() then
-        desynccache:set_int(global_vars.tickcount % 8 >= 2 and rdj1:get_int() or rdj2:get_int())
-        aacache.override = true
-    else
-        if aacache.override then
-            desynccache:set_int(aacache.backup)
-            aacache.override = false
-        else
-            aacache.backup = desynccache:get_int()
-        end
-      end
-    end
-
-    function randomjitter()
-        if rjt:get_bool() then
-            jitcache:set_int(global_vars.tickcount % 8 >= 2 and rjt1:get_int() or rjt2:get_int())
-            jtcache.override = true
-        else
-            if jtcache.override then
-                jitcache:set_int(jtcache.backup)
-                jtcache.override = false
-            else
-                jtcache.backup = jitcache:get_int()
-            end
-          end
-        end
-        function randomcomp()
-            if rjc:get_bool() then
-                cacache:set_int(global_vars.tickcount % 8 >= 2 and rjc1:get_int() or rjc2:get_int())
-                compcache.override = true
-            else
-                if compcache.override then
-                    cacache:set_int(compcache.backup)
-                    compcache.override = false
-                else
-                    compcache.backup = cacache:get_int()
-                end
-              end
-            end
 
 
 
+local vector = require 'vector'
 
+local rgba_to_hex = function(r, g, b, a)
+    return bit.tohex(
+        (math.floor(r + 0.5) * 16777216) +
+        (math.floor(g + 0.5) * 65536) +
+        (math.floor(b + 0.5) * 256) +
+        (math.floor(a + 0.5))
+    )
+end
 
+local function hexaToRgba(hexaColor)
+    local hex = hexaColor:gsub("#", "")
+    local r = tonumber(hex:sub(1, 2), 16) / 255
+    local g = tonumber(hex:sub(3, 4), 16) / 255
+    local b = tonumber(hex:sub(5, 6), 16) / 255
+    local a = tonumber(hex:sub(7, 8), 16) / 255
 
---фейклаги спасченые с авроры 
---бтв я их зафиксил
-function OSFF()
-
-    if osf:get_bool() then
-        if os:get_int() == 0 and not dt:get_bool() then
-          if hs:get_bool() then
-              limit:set_int(1)
-              cache.override = true
-          else
-              if cache.override then
-              limit:set_int(cache.backup)
-              cache.override = false
-              else
-              cache.backup = limit:get_int()
-              end
-            end
-          end
-        end
-    
-      if osf:get_bool() then
-        if os:get_int() == 1 and not dt:get_bool() then
-          if hs:get_bool() then
-              limit:set_int(global_vars.tickcount % 32 >= 30 and 6 or 1)
-              cache.override = true
-          else
-              if cache.override then
-              limit:set_int(cache.backup)
-              cache.override = false
-              else
-              cache.backup = limit:get_int()
-              end
-            end
-          end
-        end
-    
-    if osf:get_bool() then
-        if os:get_int() == 2 and not dt:get_bool() then
-            if hs:get_bool() then
-                limit:set_int(6)
-                cache.override = true
-            else
-                if cache.override then
-                limit:set_int(cache.backup)
-                cache.override = false
-                else
-                cache.backup = limit:get_int()
-                end
-            end
-        end
-    end
-    end
-
---визуалы
-pixel = render.font_esp
-screen_center = {
-    w = 0,
-    h = 0
+    return r, g, b, a
+end
+local hitgroup_names = { "generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg", "neck",
+    "?", "gear" }
+local refs = {
+    double_tap = { ui.reference('RAGE', 'Aimbot', 'Double tap') },
+    duck_peek_assist = ui.reference('RAGE', 'Other', 'Duck peek assist'),
+    pitch = { ui.reference('AA', 'Anti-aimbot angles', 'Pitch') },
+    yaw_base = ui.reference('AA', 'Anti-aimbot angles', 'Yaw base'),
+    yaw = { ui.reference('AA', 'Anti-aimbot angles', 'Yaw') },
+    yaw_jitter = { ui.reference('AA', 'Anti-aimbot angles', 'Yaw jitter') },
+    body_yaw = { ui.reference('AA', 'Anti-aimbot angles', 'Body yaw') },
+    freestanding_body_yaw = ui.reference('AA', 'anti-aimbot angles', 'Freestanding body yaw'),
+    edge_yaw = ui.reference('AA', 'Anti-aimbot angles', 'Edge yaw'),
+    freestanding = { ui.reference('AA', 'Anti-aimbot angles', 'Freestanding') },
+    roll = ui.reference('AA', 'Anti-aimbot angles', 'Roll'),
+    on_shot_anti_aim = { ui.reference('AA', 'Other', 'On shot anti-aim') },
+    slow_motion = { ui.reference('AA', 'Other', 'Slow motion') },
+    dmg = { ui.reference('RAGE', 'Aimbot', 'Minimum damage override') },
+    auto_peek = { ui.reference("Rage", "Other", "Quick peek assist") },
 }
 
-screen_size_x, screen_size_y = render.get_screen_size()
-x = screen_size_x / 2
-y = screen_size_y / 2
 
-local lp = entities.get_entity(engine.get_local_player())
+local lFeetYaw   = 0
+local Angle2     = 0
 
+local log        = {}
+local logs       = {}
 
-function wm()
-    if not lp then return end
-if not lp:is_alive() then return end
-
-if not engine.is_in_game() then return end
-    alpha2 = math.floor(math.abs(math.sin(global_vars.realtime) * 1) * 255)
-    wm_text1 = "+/- cyber.technology"
-    wm_text2 = "+/- version: "
-    wm_debug = "debug"
-    nm = name:get_string()
-    wm_text3 = "+/- user: " .. nm .. ""
-    if watermark:get_bool() then
-    render.text(pixel, x - 766, y + 0, wm_text1, render.color(255, 255, 255));
-    render.text(pixel, x - 766, y + 10, wm_text2, render.color(255, 255, 255));
-    render.text(pixel, x - 712, y + 10, wm_debug, render.color(255, 255,255, alpha2));
-    render.text(pixel, x - 766, y + 20, wm_text3, render.color(255, 255, 255));
-    
+-- * table
+table.shall_copy = function(t)
+    local new_t = {}
+    for i = 1, #t do
+        table.insert(new_t, t[i])
+    end
+    return new_t
 end
+table.reverse    = function(t)
+    local new_t = table.shall_copy(t)
+    for i = 1, math.floor(#t / 2), 1 do
+        new_t[i], new_t[#t - i + 1] = new_t[#t - i + 1], new_t[i]
+    end
+    return new_t
 end
-
-function indic()
-if not lp:is_alive() then return end
-
-if not engine.is_in_game() then return end
-
-local DT = find("rage>aimbot>aimbot>double tap"):get_bool()
-local OS = find("rage>aimbot>aimbot>hide shot"):get_bool()
-local DMG = find("rage>aimbot>ssg08>scout>override"):get_bool()
-local SP = find("rage>aimbot>aimbot>force extra safety"):get_bool()
-local AP = find("misc>movement>peek assist"):get_bool()
-local FD = find("misc>movement>fake duck"):get_bool()
-local text =  "cyber."
-local text2 = "tech"
-local text3 = "DOUBLETAP"
-local text4 = "OS-AA"
-local text5 = "AUTOPEEK"
-local text6 = "SAFEPOINT"
-local text7 = "FAKEDUCK"
-local text8 = "DAMAGE"
-local textx, texty = render.get_text_size(pixel, text)
-local text2x, text2y = render.get_text_size(pixel, text2)
-local text3x, text3y = render.get_text_size(pixel, text3)
-local text4x, text4y = render.get_text_size(pixel, text4)
-local text5x, text5y = render.get_text_size(pixel, text5)
-local text6x, text6y = render.get_text_size(pixel, text6)
-local text7x, text7y = render.get_text_size(pixel, text7)
-local scoped = lp:get_prop("m_bIsScoped")
-
-local function Clamp(Value, Min, Max)
-    return Value < Min and Min or (Value > Max and Max or Value)
+table.add_table  = function(t, add_t)
+    local new_t = table.shall_copy(t)
+    for _, v in pairs(add_t) do
+        table.insert(new_t, v)
+    end
+    return new_t
 end
-ay = 0
-
-    if visual:get_bool() then
-        if visualm:get_int() == 1 then
-            if not scoped then
-            render.text(pixel, x - 23, y + 20, text, render.color(255,255, 255, 255))
-            render.text(pixel, x + 3, y + 20, text2, render.color(255,255, 255, alpha2))
-            if OS then
-                render.text(pixel, x - 12, y + 30 + ay, text4, render.color(255,255, 255, 255)) 
-                ay = ay + 10
-            end
-            if DT then
-                render.text(pixel, x - 22, y + 30 + ay, text3, render.color(255,255, 255, 255)) 
-                ay = ay + 10
-            end
-            if DMG then
-                render.text(pixel, x - 15, y + 30 + ay, text8, render.color(255,255, 255, 255)) 
-                ay = ay + 10
-            end
-            else
-                if scoped then
-                    render.text(pixel, x+10, y + 20, text, render.color(255,255, 255, 255))
-                    render.text(pixel, x + 36, y + 20, text2, render.color(255,255, 255, alpha2))
-                    if OS then
-                        render.text(pixel, x + 10, y + 30 + ay, text4, render.color(255,255, 255, 255)) 
-                        ay = ay + 10
-                    end
-                    if DT then
-                        render.text(pixel, x + 10, y + 30 + ay, text3, render.color(255,255, 255, 255)) 
-                        ay = ay + 10
-                    end
-                    if DMG then
-                        render.text(pixel, x + 10, y + 30 + ay, text8, render.color(255,255, 255, 255)) 
-                        ay = ay + 10
-                    end
-
-
+table.key_rotate = function(t, i)
+    i = -i
+    for k = 1, math.abs(i) do
+        if i < 0 then
+            table.insert(t, 1, table.remove(t))
+        else
+            table.insert(t, table.remove(t, 1))
         end
     end
+    return t
 end
+-- * math
+math.flerp       = function(a, b, t)
+    return a + t * (b - a)
 end
+math.round       = function(value, decimals)
+    local multiplier = 10.0 ^ (decimals or 0.0)
+    return math.floor(value * multiplier + 0.5) / multiplier
+end
+math.flerp_color = function(clr1, clr2, t)
+    return render.color(
+        math.round(math.flerp(clr1.r, clr2.r, t)),
+        math.round(math.flerp(clr1.g, clr2.g, t)),
+        math.round(math.flerp(clr1.b, clr2.b, t)),
+        math.round(math.flerp(clr1.a, clr2.a, t))
+    )
+end
+math.nway        = function(start, final, way)
+    local val_t = {}; for i = 0, 1, 1 / (way - 1) do
+        table.insert(val_t, math.flerp(start, final, i))
+    end
+    return val_t
+end
+math.is_float    = function(num)
+    return num % 1 ~= 0
 end
 
---[[
-    local desynccache = gui.get_config_item("Rage>Anti-Aim>Desync>Fake amount")
-local cacache = gui.get_config_item("Rage>Anti-Aim>Desync>Compensate angle")
-local jitcache = gui.get_config_item("Rage>Anti-Aim>Angles>Jitter range")
+local side       = 0
+string.split     = function(text)
+    local t = {}
+    for i = 1, text:len() do
+        table.insert(t, text:sub(i, i))
+    end
+    return t
+end
+local Math       = {
+    number_fix    = function(number, value)
+        return string.format("%g", string.format("%." .. value .. "f", number))
+    end,
+    time_to_ticks = function(t)
+        return math.floor(0.5 + (t / globals.tickinterval()))
+    end,
+    round         = function(value, decimals)
+        local multiplier = 10.0 ^ (decimals or 0.0)
+        return math.floor(value * multiplier + 0.5) / multiplier
+    end,
+    clamp         = function(x, min, max)
+        if x < min then return min end
+        if x > max then return max end
+        if x == nil then return min end
+        return x
+    end,
+    normalize_yaw = function(angle)
+        if angle < -180 then
+            angle = angle + 360
+        end
+        if angle > 180 then
+            angle = angle - 360
+        end
+        return angle
+    end,
+    lerp          = function(start, _end, time, do_extraanim)
+        if (not do_extraanim and math.floor(start) == _end) then
+            return
+                _end
+        end
+        time = global_vars.frametime * (time * 175)
+        if time < 0 then
+            time = 0.01
+        elseif time > 1 then
+            time = 1
+        end
+        return Math.round((_end - start) * time + start, 2)
+    end,
+    flerp         = function(a, b, t)
+        return a + t * (b - a)
+    end,
+    elerp         = function(self, start, end_, speed, delta)
+        if (math.abs(start - end_) < (delta or 0.01)) then
+            return end_
+        end
+        speed = speed or 0.095
+        local time = global_vars.frametime * (175 * speed)
+        return ((end_ - start) * time + start)
+    end,
+}
+math.lerp        = function(a, b, time)
+    return Math.round(a + (b - a) * time, 4)
+end
+local function get_curtime(offset)
+    return globals.curtime() - (offset * globals.tickinterval())
+end
+
+
+local animations = {
+    data = {},
+
+    process = function(self, name, bool, time)
+        if not self.data[name] then
+            self.data[name] = 0
+        end
+
+        local animation = globals.frametime() * (bool and 1 or -1) * (time or 4)
+        self.data[name] = Math.clamp(self.data[name] + animation, 0, 1)
+        return self.data[name]
+    end,
+
+    lerp = function(self, start, end_, speed, delta)
+        if (math.abs(start - end_) < (delta or 0.01)) then
+            return end_
+        end
+        speed = speed or 0.095
+        local time = globals.frametime() * (175 * speed)
+        return ((end_ - start) * time + start)
+    end,
+}
+local simtime_old = 0;
+local defensive_until = 0;
+local simtime = 0;
+local activity = 0;
+ffi.cdef [[
+    typedef int(__thiscall* get_clipboard_text_count)(void*);
+	typedef void(__thiscall* set_clipboard_text)(void*, const char*, int);
+	typedef void(__thiscall* get_clipboard_text)(void*, int, const char*, int);
+
+    typedef void*(__thiscall* get_client_entity_t)(void*, int);
+
+    typedef struct
+    {
+        char pad20[24];
+        uint32_t m_nSequence;
+        float m_flPrevCycle;
+        float m_flWeight;
+        char pad20[8];
+        float m_flCycle;
+        void *m_pOwner;
+        char pad_0038[ 4 ];
+    } animation_layer_t;
+
+    typedef struct
+    {
+        char pad[ 3 ];
+        char m_bForceWeaponUpdate; //0x4
+        char pad1[ 91 ];
+        void* m_pBaseEntity; //0x60
+        void* m_pActiveWeapon; //0x64
+        void* m_pLastActiveWeapon; //0x68
+        float m_flLastClientSideAnimationUpdateTime; //0x6C
+        int m_iLastClientSideAnimationUpdateFramecount; //0x70
+        float m_flAnimUpdateDelta; //0x74
+        float m_flEyeYaw; //0x78
+        float m_flPitch; //0x7C
+        float m_flGoalFeetYaw; //0x80
+        float m_flCurrentFeetYaw; //0x84
+        float m_flCurrentTorsoYaw; //0x88
+        float m_flUnknownVelocityLean; //0x8C
+        float m_flLeanAmount; //0x90
+        char pad2[ 4 ];
+        float m_flFeetCycle; //0x98
+        float m_flFeetYawRate; //0x9C
+        char pad3[ 4 ];
+        float m_fDuckAmount; //0xA4
+        float m_fLandingDuckAdditiveSomething; //0xA8
+        char pad4[ 4 ];
+        float m_vOriginX; //0xB0
+        float m_vOriginY; //0xB4
+        float m_vOriginZ; //0xB8
+        float m_vLastOriginX; //0xBC
+        float m_vLastOriginY; //0xC0
+        float m_vLastOriginZ; //0xC4
+        float m_vVelocityX; //0xC8
+        float m_vVelocityY; //0xCC
+        char pad5[ 4 ];
+        float m_flUnknownFloat1; //0xD4
+        char pad6[ 8 ];
+        float m_flUnknownFloat2; //0xE0
+        float m_flUnknownFloat3; //0xE4
+        float m_flUnknown; //0xE8
+        float m_flSpeed2D; //0xEC
+        float m_flUpVelocity; //0xF0
+        float m_flSpeedNormalized; //0xF4
+        float m_flFeetSpeedForwardsOrSideWays; //0xF8
+        float m_flFeetSpeedUnknownForwardOrSideways; //0xFC
+        float m_flTimeSinceStartedMoving; //0x100
+        float m_flTimeSinceStoppedMoving; //0x104
+        bool m_bOnGround; //0x108
+        bool m_bInHitGroundAnimation; //0x109
+        float m_flTimeSinceInAir; //0x10A
+        float m_flLastOriginZ; //0x10E
+        float m_flHeadHeightOrOffsetFromHittingGroundAnimation; //0x112
+        float m_flStopToFullRunningFraction; //0x116
+        char pad7[ 4 ]; //0x11A
+        float m_flMagicFraction; //0x11E
+        char pad8[ 60 ]; //0x122
+        float m_flWorldForce; //0x15E
+        char pad9[ 462 ]; //0x162
+        float m_flMaxYaw; //0x334
+    } anim_state_t;
+    typedef struct
+    {
+        char   pad0[0x14];             //0x0000
+        bool        bProcessingMessages;    //0x0014
+        bool        bShouldDelete;          //0x0015
+        char   pad1[0x2];              //0x0016
+        int         iOutSequenceNr;         //0x0018 last send outgoing sequence number
+        int         iInSequenceNr;          //0x001C last received incoming sequence number
+        int         iOutSequenceNrAck;      //0x0020 last received acknowledge outgoing sequence number
+        int         iOutReliableState;      //0x0024 state of outgoing reliable data (0/1) flip flop used for loss detection
+        int         iInReliableState;       //0x0028 state of incoming reliable data
+        int         iChokedPackets;         //0x002C number of choked packets
+    } INetChannel; // Size: 0x0444
+
+    typedef bool(__thiscall* file_exists_t)(void* this, const char* pFileName, const char* pPathID);
+    typedef int BOOL;
+    typedef long LONG;
+    typedef unsigned long HWND;
+    typedef struct{
+        LONG x, y;
+    }POINT, *LPPOINT;
+    typedef unsigned long DWORD, *PDWORD, *LPDWORD;
+
+    typedef struct {
+        DWORD  nLength;
+        void* lpSecurityDescriptor;
+        BOOL   bInheritHandle;
+    } SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+
+    short GetAsyncKeyState(int vKey);
+    typedef struct mask {
+        char m_pDriverName[512];
+        unsigned int m_VendorID;
+        unsigned int m_DeviceID;
+        unsigned int m_SubSysID;
+        unsigned int m_Revision;
+        int m_nDXSupportLevel;
+        int m_nMinDXSupportLevel;
+        int m_nMaxDXSupportLevel;
+        unsigned int m_nDriverVersionHigh;
+        unsigned int m_nDriverVersionLow;
+        int64_t pad_0;
+        union {
+            int xuid;
+            struct {
+                int xuidlow;
+                int xuidhigh;
+            };
+        };
+        char name[128];
+        int userid;
+        char guid[33];
+        unsigned int friendsid;
+        char friendsname[128];
+        bool fakeplayer;
+        bool ishltv;
+        unsigned int customfiles[4];
+        unsigned char filesdownloaded;
+    };
+    typedef int(__thiscall* get_current_adapter_fn)(void*);
+    typedef void(__thiscall* get_adapters_info_fn)(void*, int adapter, struct mask& info);
+    typedef bool(__thiscall* file_exists_t)(void* this, const char* pFileName, const char* pPathID);
+    typedef long(__thiscall* get_file_time_t)(void* this, const char* pFileName, const char* pPathID);
 ]]
-left = find("rage>anti-aim>angles>left"):get_bool()
-right = find("rage>anti-aim>angles>right"):get_bool()
-freestand = find("rage>anti-aim>angles>freestand"):get_bool()
+local way = 0
+local function contains(source, target)
+    for id, name in pairs(ui.get(source)) do
+        if name == target then
+            return true
+        end
+    end
+
+    return false
+end
 
 
+local all = {
+    states = { "standing", "moving", "jumping", "jumping-crouch", "walking", "ducking", "freestand" },
+    menu_states = { "~s ", "~m ", "~j ", "~j-c ", "~w ", "~d ", "~fs " }
+}
+local menu = {
+    global = {
+        menu = ui.new_combobox("LUA", "A", "sirius \a96C83CFFgamesense",
+            { "global", "antihit system", "visuals", "misc" })
+    },
+    anti_aim = {
+        states = ui.new_combobox("LUA", "B", "player\a96C83CFFstate", all.states),
+        select = ui.new_combobox("LUA", "A", "buider mode", { "default", "\aB6B665FFdefensive" }),
+        def_readt = ui.new_multiselect("LUA", "A", "defensive on", { "hideshots", "doubletap" }),
+        defensive = {},
+    },
+    visuals = {
+        indicators = ui.new_checkbox("LUA", "B", "indicators"),
+        ind_color = ui.new_color_picker("LUA", "B", "indicators", 255, 255, 255, 255),
+        logs = ui.new_checkbox("LUA", "B", "hitlogs"),
+    },
+    misc = {},
 
---логи да
-local function hitlogs(shot)
-    if shot.manual then return end
-        local hitgroup_names = {"generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg", "neck", "?", "gear"}
-        local p = entities.get_entity(shot.target)
-        local n = p:get_player_info()
-        local hitgroup = shot.server_hitgroup
-        local clienthitgroup = shot.client_hitgroup
-        local health = p:get_prop("m_iHealth")
-    
-            if rl:get_bool() then
-                if shot.server_damage > 0 then
-                    print( "cyber.tech | Registered shot to " , n.name  , "'s ", hitgroup_names[hitgroup + 1]," for " , shot.server_damage, " damage (hc=", math.floor(shot.hitchance), ", bt=", math.floor(shot.backtrack),")")
-                else
-                    print( "cyber.tech | Missed " , n.name  , "'s ", hitgroup_names[shot.client_hitgroup + 1]," due to ", shot.result,  " (hc=", math.floor(shot.hitchance), ", bt=", math.floor(shot.backtrack),")")
+}
+
+for i = 1, #all.states do
+    menu.anti_aim[i] = {
+        pitch = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "pitch",
+            { "off", "default", "up", "down", "minimal", "random", "custom" }),
+        custom_pitch = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "custom pitch", -89, 89, 0, true,
+            '°'),
+        yawbase = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "yaw base",
+            { "local view", "at targets" }),
+        yaw = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "yaw",
+            { "off", "180", "spin", "static", "180z", "crosshair" }),
+        yawjitter = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "yaw jitter",
+            { "off", "offset", "center", "random", "skitter" }),
+        jitterint = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "jitter", -180, 180, 0, true, '°'),
+        yawadd = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "yaw add type",
+            { "static", "2-side", "slowed", "3-way", "5-way" }),
+
+        yawstatic = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "static", -180, 180, 0, true, '°'),
+
+        yawleft = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "left", -180, 180, 0, true, '°'),
+        yawright = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "right", -180, 180, 0, true, '°'),
+        ticks = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "slowed by", 2, 8, 0, true, 't'),
+
+        way1 = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "way 1", -180, 180, 0, true, '°'),
+        way2 = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "way 2", -180, 180, 0, true, '°'),
+        way3 = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "way 3", -180, 180, 0, true, '°'),
+        way4 = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "way 4", -180, 180, 0, true, '°'),
+        way5 = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "way 5", -180, 180, 0, true, '°'),
+
+        bodyyaw = ui.new_combobox("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "body yaw",
+            { "off", "opposite", "jitter", "static" }),
+        bodyint = ui.new_slider("LUA", "B", "\aFFFFFFC8" .. all.menu_states[i] .. "desync", -180, 180, 0, true, '°'),
+        bodyfree = ui.new_checkbox("LUA", "B", all.menu_states[i] .. "freestanding body yaw"),
+        defensive = {
+            force = ui.new_checkbox("LUA", "B",
+                "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "override defensive"),
+            enable = ui.new_checkbox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "enable"),
+            pitch = ui.new_combobox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "pitch",
+                { "off", "default", "up", "down", "minimal", "random", "custom" }),
+            custom_pitch = ui.new_slider("LUA", "B",
+                "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "custom pitch", -89, 89, 0, true, '°'),
+            yawbase = ui.new_combobox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "yaw base",
+                { "local view", "at targets" }),
+            yaw = ui.new_combobox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "yaw",
+                { "off", "180", "spin", "static", "180z", "crosshair" }),
+
+            yawjitter = ui.new_combobox("LUA", "B",
+                "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "yaw jitter",
+                { "off", "offset", "center", "random", "skitter" }),
+            jitterint = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "jitter",
+                -180, 180, 0, true, '°'),
+
+            yawadd = ui.new_combobox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "yaw add type",
+                { "static", "2-side", "slowed", "3-way", "5-way" }),
+
+            yawstatic = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "static",
+                -180, 180, 0, true, '°'),
+
+            yawleft = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "left", -180,
+                180, 0, true, '°'),
+            yawright = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "right", -180,
+                180, 0, true, '°'),
+            ticks = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "slowed by", 2, 8,
+                0, true, 't'),
+
+            way1 = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "way 1", -180, 180,
+                0, true, '°'),
+            way2 = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "way 2", -180, 180,
+                0, true, '°'),
+            way3 = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "way 3", -180, 180,
+                0, true, '°'),
+            way4 = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "way 4", -180, 180,
+                0, true, '°'),
+            way5 = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "way 5", -180, 180,
+                0, true, '°'),
+            bodyyaw = ui.new_combobox("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "body yaw",
+                { "off", "opposite", "jitter", "static" }),
+            bodyint = ui.new_slider("LUA", "B", "\aB6B665FFdef " .. "\aFFFFFFC8" .. all.menu_states[i] .. "desync", -180,
+                180, 0, true, '°'),
+            bodyfree = ui.new_checkbox("LUA", "B", "\aB6B665FFdef " .. all.menu_states[i] .. "freestanding body yaw"),
+        }
+    }
+end
+log.add                = function(text, r, g, b, a)
+    client.color_log(r, g, b, "[sirius] " .. text)
+    table.insert(logs, 1, { text = text, r1 = r, g1 = g, b1 = b, a1 = a, alpha = 0, time = globals.curtime() + 4 })
+end
+local helpers          = {
+    get_hwid = function()
+        material_system = client.create_interface('materialsystem.dll', 'VMaterialSystem080')
+        material_interface = ffi.cast('void***', material_system)[0]
+
+        get_current_adapter = ffi.cast('get_current_adapter_fn', material_interface[25])
+        get_adapter_info = ffi.cast('get_adapters_info_fn', material_interface[26])
+
+        current_adapter = get_current_adapter(material_interface)
+
+        adapter_struct = ffi.new('struct mask')
+        get_adapter_info(material_interface, current_adapter, adapter_struct)
+
+        driverName = tostring(ffi.string(adapter_struct['m_pDriverName']))
+        vendorId = tostring(adapter_struct['m_VendorID'])
+        deviceId = tostring(adapter_struct['m_DeviceID'])
+        class_ptr = ffi.typeof("void***")
+        rawfilesystem = client.create_interface("filesystem_stdio.dll", "VBaseFileSystem011")
+        filesystem = ffi.cast(class_ptr, rawfilesystem)
+        file_exists = ffi.cast("file_exists_t", filesystem[0][10])
+        get_file_time = ffi.cast("get_file_time_t", filesystem[0][13])
+
+        function bruteforce_directory()
+            for i = 65, 90 do
+                directory = string.char(i) .. ":\\Windows\\Setup\\State\\State.ini"
+
+                if (file_exists(filesystem, directory, "ROOT")) then
+                    return directory
                 end
             end
-    
+            return nil
+        end
+
+        directory = bruteforce_directory()
+        install_time = get_file_time(filesystem, directory, "ROOT")
+        hardwareID = install_time * 2
+        m_id = ((vendorId * deviceId) * 2) + hardwareID
+        return m_id
+    end,
+    last_sim_time = 0,
+    defensive_until = 0,
+
+    is_defensive = function(self)
+        if not entity.get_local_player() then
+            return false
+        end
+        local tickcount = globals.tickcount();
+        local local_player = entity.get_local_player();
+        local sim_time = Math.time_to_ticks(entity.get_prop(entity.get_local_player(), "m_flSimulationTime"));
+        if ((ui.get(refs.double_tap[2]) and contains(menu.anti_aim.def_readt, "doubletap")) or (ui.get(refs.on_shot_anti_aim[2]) and contains(menu.anti_aim.def_readt, "hideshots"))) then
+            local sim_diff = sim_time - self.last_sim_time;
+
+            if sim_diff < 0 then
+                self.defensive_until = tickcount + math.abs(sim_diff) -
+                    Math.time_to_ticks(client.latency());
+            end
+
+            self.last_sim_time = sim_time;
+
+            return self.defensive_until > tickcount;
+        end
+    end,
+    get_charge = function()
+        local target = entity.get_local_player()
+        if not target then
+            return
+        end
+
+        local weapon = entity.get_player_weapon(target)
+
+        if target == nil or weapon == nil then
+            return false
+        end
+
+        if get_curtime(16) < entity.get_prop(target, 'm_flNextAttack') then
+            return false
+        end
+
+        if get_curtime(0) < entity.get_prop(weapon, 'm_flNextPrimaryAttack') then
+            return false
+        end
+
+        return true
     end
 
+}
 
-    function on_shot_registered(shot)
-        hitlogs(shot)
+local playerstate      = 0
+local air_tick         = 0
+local in_air           = false
+local tick_switch      = 0
+local screenx, screeny = client.screen_size()
+local callbacks        = {
+    on_paint = {
+        menu_elements = function()
+            local tab = ui.get(menu.global.menu)
+
+            ui.set_visible(menu.anti_aim.states, tab == "antihit system")
+            ui.set_visible(menu.anti_aim.select, tab == "antihit system")
+            ui.set_visible(menu.anti_aim.def_readt, tab == "antihit system")
+            ui.set_visible(menu.visuals.indicators, tab == "visuals")
+            ui.set_visible(menu.visuals.ind_color, tab == "visuals" and ui.get(menu.visuals.indicators))
+            for i = 1, #all.states do
+                ui.set_visible(menu.anti_aim[i].defensive.enable,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive")
+                ui.set_visible(menu.anti_aim[i].defensive.force,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive")
+
+                ui.set_visible(menu.anti_aim[i].pitch,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].custom_pitch,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].pitch) == "custom" and ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].yawbase,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].yaw,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].yawadd,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+
+                ui.set_visible(menu.anti_aim[i].yawjitter,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+
+                ui.set_visible(menu.anti_aim[i].jitterint,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default" and
+                    (ui.get(menu.anti_aim[i].yawjitter) == "offset" or ui.get(menu.anti_aim[i].yawjitter) == "center" or ui.get(menu.anti_aim[i].yawjitter) == "random" or ui.get(menu.anti_aim[i].yawjitter) == "skitter"))
+                ui.set_visible(menu.anti_aim[i].yawstatic,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].yawadd) == "static" and ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].yawleft,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "2-side" or ui.get(menu.anti_aim[i].yawadd) == "slowed") and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].yawright,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "2-side" or ui.get(menu.anti_aim[i].yawadd) == "slowed") and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].ticks,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "slowed") and ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].way1,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "3-way" or ui.get(menu.anti_aim[i].yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].way2,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "3-way" or ui.get(menu.anti_aim[i].yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].way3,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "3-way" or ui.get(menu.anti_aim[i].yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].way4,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "5-way") and ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].way5,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].yawadd) == "5-way") and ui.get(menu.anti_aim.select) == "default")
+
+                ui.set_visible(menu.anti_aim[i].bodyyaw,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+                ui.set_visible(menu.anti_aim[i].bodyint,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default" and
+                    (ui.get(menu.anti_aim[i].bodyyaw) == "jitter" or ui.get(menu.anti_aim[i].bodyyaw) == "static"))
+                ui.set_visible(menu.anti_aim[i].bodyfree,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "default")
+
+
+                ui.set_visible(menu.anti_aim[i].defensive.pitch,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.custom_pitch,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].defensive.pitch) == "custom" and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.yawbase,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.yaw,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.yawadd,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+
+                ui.set_visible(menu.anti_aim[i].defensive.yawstatic,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].defensive.yawadd) == "static" and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.yawleft,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "2-side" or ui.get(menu.anti_aim[i].yawadd) == "slowed") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.yawright,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "2-side" or ui.get(menu.anti_aim[i].yawadd) == "slowed") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.ticks,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "slowed") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.way1,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "3-way" or ui.get(menu.anti_aim[i].defensive.yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.way2,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "3-way" or ui.get(menu.anti_aim[i].defensive.yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.way3,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "3-way" or ui.get(menu.anti_aim[i].defensive.yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.way4,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.way5,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    (ui.get(menu.anti_aim[i].defensive.yawadd) == "5-way") and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+
+
+                ui.set_visible(menu.anti_aim[i].defensive.yawjitter,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive")
+
+                ui.set_visible(menu.anti_aim[i].defensive.jitterint,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true and
+                    (ui.get(menu.anti_aim[i].defensive.yawjitter) == "offset" or ui.get(menu.anti_aim[i].defensive.yawjitter) == "center" or ui.get(menu.anti_aim[i].defensive.yawjitter) == "random" or ui.get(menu.anti_aim[i].defensive.yawjitter) == "skitter"))
+
+
+
+
+                ui.set_visible(menu.anti_aim[i].defensive.bodyyaw,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true)
+                ui.set_visible(menu.anti_aim[i].defensive.bodyint,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive" and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true and
+                    (ui.get(menu.anti_aim[i].defensive.bodyyaw) == "jitter" or ui.get(menu.anti_aim[i].defensive.bodyyaw) == "static"))
+                ui.set_visible(menu.anti_aim[i].defensive.bodyfree,
+                    tab == "antihit system" and ui.get(menu.anti_aim.states) == all.states[i] and
+                    ui.get(menu.anti_aim[i].defensive.enable) == true and
+                    ui.get(menu.anti_aim.select) == "\aB6B665FFdefensive")
+            end
+        end,
+        indicators = function()
+            local local_player = entity.get_local_player()
+            if not local_player or not entity.is_alive(local_player) then return end
+            if not ui.get(menu.visuals.indicators) then return end
+            local dt_anim = animations:process("Is charged", helpers.get_charge(), 8)
+            local bind_color = { ui.get(menu.visuals.ind_color) }
+            local dt_r, dt_g, dt_b = lerp({ 255, 25, 25, 255 }, { bind_color[1], bind_color[2], bind_color[3], 255 },
+                dt_anim)
+            local list = {
+                {
+                    name = "DT",
+                    path = refs.double_tap[2],
+                    r = dt_r,
+                    g = dt_g,
+                    b = dt_b,
+                    get_bool = 0,
+                    scope = 0
+                },
+                {
+                    name = "OS",
+                    path = refs.on_shot_anti_aim[2],
+                    r = 255,
+                    g = 255,
+                    b = 255,
+                    get_bool = 0,
+                    scope = 0
+                },
+                {
+                    name = "DMG",
+                    path = refs.dmg[2],
+                    r = 200,
+                    g = 200,
+                    b = 200,
+                    get_bool = 0,
+                    scope = 0
+                },
+                {
+                    name = "PA",
+                    path = refs.auto_peek[2],
+                    r = bind_color[1],
+                    g = bind_color[2],
+                    b = bind_color[3],
+                    get_bool = 0,
+                    scope = 0
+                },
+
+            }
+            local ay = 0
+            local x, y = screenx / 2, screeny / 2
+            local scoped = entity.get_prop(local_player, "m_bIsScoped")
+            local anim = animations:process("Indicators", scoped == 1 and true or false, 8)
+            local add_x = 24 * anim
+            local build_text = renderer.measure_text("c-", "BETA")
+            local sirius_text = renderer.measure_text("c-", "SIRIUS ")
+            renderer.text(x - 2 + add_x - build_text / 2, y + 20, 255, 255, 255, 255, "c-", nil, "SIRIUS")
+            renderer.text(x - 1 + add_x + sirius_text / 2, y + 20, 255, 255, 255, 255, "c-", 0,
+                "\a" .. rgba_to_hex(ui.get(menu.visuals.ind_color)) .. "BETA")
+
+            for k, v in pairs(list) do
+                v.get_bool = animations:process(v.name .. " anim", ui.get(v.path) and true or false, 8)
+                v.scope = (renderer.measure_text("c-", "SIRIUS") / 2 + renderer.measure_text("c-", v.name) / 2 - 10) *
+                    anim
+                renderer.text(x - 1 + v.scope, y + 28 + ay, v.r, v.g, v.b, 255 * v.get_bool, "c-", 0, v.name)
+                ay = ay + 8 * v.get_bool
+            end
+        end,
+        logs = function()
+            local ss = {}
+            ss.x, ss.y = screenx, screeny
+            local offset = 0
+            local local_player = entity.get_local_player()
+            if not local_player then logs = {} end
+            if not ui.get(menu.visuals.logs) then return end
+            for i, v in pairs(logs) do
+                if v.time > globals.curtime() and i <= 10 then
+                    v.alpha = math.lerp(v.alpha, 255, 0.13)
+                else
+                    v.alpha = math.lerp(v.alpha, 0, 0.13)
+                    if v.alpha < 0 then
+                        table.remove(logs, i)
+                    end
+                end
+
+                renderer.text(ss.x / 2 - 50 + (50 * (v.alpha / 255)), ss.y / 2 + 155 + offset, v.r1, v.g1, v.b1, v.alpha,
+                    "c", 0, v.text)
+                offset = offset + 15 * (v.alpha / 255)
+            end
+        end
+
+    },
+    on_create_move = {
+        builder = function(cmd)
+            local local_player = entity.get_local_player()
+
+            if not local_player then return end
+
+
+
+            local flag = entity.get_prop(local_player, "m_fFlags")
+
+            local vel = vector(entity.get_prop(local_player, 'm_vecVelocity')):length2d()
+            local ducked = entity.get_prop(local_player, 'm_bDucked') == 1
+            if ui.get(refs.freestanding[2]) then
+                playerstate = 7
+            else
+                if flag == 256 or flag == 262 then
+                    in_air = true
+                    air_tick = globals.tickcount() + 3
+                else
+                    in_air = (air_tick > globals.tickcount()) and true or false
+                end
+                if in_air and ducked then
+                    playerstate = 4
+                else
+                    if in_air then
+                        playerstate = 3
+                    else
+                        if ducked then
+                            playerstate = 6
+                        else
+                            if ui.get(refs.slow_motion[2]) then
+                                playerstate = 5
+                            else
+                                if vel < 5 then
+                                    playerstate = 1
+                                else
+                                    playerstate = 2
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+
+            local body_yaw = entity.get_prop(local_player, 'm_flPoseParameter', 11)
+
+            if globals.chokedcommands() == 0 or globals.chokedcommands() == 1 then
+                Angle2 = Math.round(body_yaw * 120 - 60)
+            end
+
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "slowed" or ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "2-side" then
+                if globals.chokedcommands() == 0 or globals.chokedcommands() == 1 then
+                    tick_switch = tick_switch + 1
+                end
+                speed_tick = ui.get(menu.anti_aim[playerstate].ticks)
+                if tick_switch == speed_tick then
+                    side = 0
+                end
+                if tick_switch >= speed_tick * 2 then
+                    side = 1
+                    tick_switch = 0
+                end
+            end
+            if globals.chokedcommands() == 0 or globals.chokedcommands() == 1 then
+                if ui.get(menu.anti_aim[playerstate].yawadd) == "3-way" or ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "3-way" then
+                    way = way + 1
+                    if way > 2 then
+                        way = 0
+                    end
+                end
+                if ui.get(menu.anti_aim[playerstate].yawadd) == "5-way" or ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "5-way" then
+                    way = way + 1
+                    if way > 4 then
+                        way = 0
+                    end
+                end
+            end
+
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "2-side" or ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "2-side" then
+                if Angle2 >= 0 then
+                    side = 1
+                end
+                if Angle2 <= 0 then
+                    side = 0
+                end
+            end
+
+            ui.set(refs.pitch[1], ui.get(menu.anti_aim[playerstate].pitch))
+            ui.set(refs.pitch[2], ui.get(menu.anti_aim[playerstate].custom_pitch))
+            ui.set(refs.yaw_base, ui.get(menu.anti_aim[playerstate].yawbase))
+
+            ui.set(refs.yaw[1], ui.get(menu.anti_aim[playerstate].yaw))
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "static" then
+                ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].yawstatic))
+            end
+            ui.set(refs.yaw_jitter[1], ui.get(menu.anti_aim[playerstate].yawjitter))
+            ui.set(refs.yaw_jitter[2], ui.get(menu.anti_aim[playerstate].jitterint))
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "2-side" then
+                if side == 0 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].yawleft))
+                end
+                if side == 1 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].yawright))
+                end
+            end
+
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "slowed" then
+                if side == 0 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].yawleft))
+                end
+                if side == 1 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].yawright))
+                end
+            end
+
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "3-way" then
+                if way == 0 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way1))
+                end
+                if way == 1 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way2))
+                end
+                if way == 2 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way3))
+                end
+            end
+
+
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "5-way" then
+                if way == 0 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way1))
+                end
+                if way == 1 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way2))
+                end
+                if way == 2 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way3))
+                end
+                if way == 3 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way4))
+                end
+                if way == 4 then
+                    ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].way5))
+                end
+            end
+            ui.set(refs.body_yaw[1], ui.get(menu.anti_aim[playerstate].bodyyaw))
+            local byaw
+            if side == 0 then
+                byaw = ui.get(menu.anti_aim[playerstate].bodyint) * 1
+            end
+            if side == 1 then
+                byaw = ui.get(menu.anti_aim[playerstate].bodyint) * -1
+            end
+            if ui.get(menu.anti_aim[playerstate].yawadd) == "slowed" and ui.get(menu.anti_aim[playerstate].bodyyaw) == "jitter" then
+                ui.set(refs.body_yaw[1], "static")
+
+                ui.set(refs.body_yaw[2], byaw)
+            else
+                ui.set(refs.body_yaw[2], ui.get(menu.anti_aim[playerstate].bodyint))
+            end
+
+            ui.set(refs.freestanding_body_yaw, ui.get(menu.anti_aim[playerstate].bodyfree))
+
+            cmd.force_defensive = ui.get(menu.anti_aim[playerstate].defensive.force)
+
+            if helpers:is_defensive() then
+                if ui.get(menu.anti_aim[playerstate].defensive.enable) then
+                    ui.set(refs.yaw_jitter[1], ui.get(menu.anti_aim[playerstate].defensive.yawjitter))
+                    ui.set(refs.yaw_jitter[2], ui.get(menu.anti_aim[playerstate].defensive.jitterint))
+                    ui.set(refs.pitch[1], ui.get(menu.anti_aim[playerstate].defensive.pitch))
+                    ui.set(refs.pitch[2], ui.get(menu.anti_aim[playerstate].defensive.custom_pitch))
+                    ui.set(refs.yaw_base, ui.get(menu.anti_aim[playerstate].defensive.yawbase))
+
+                    ui.set(refs.yaw[1], ui.get(menu.anti_aim[playerstate].defensive.yaw))
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "static" then
+                        ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.yawstatic))
+                    end
+
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "2-side" then
+                        if side == 0 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.yawleft))
+                        end
+                        if side == 1 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.yawright))
+                        end
+                    end
+
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "slowed" then
+                        if side == 0 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.yawleft))
+                        end
+                        if side == 1 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.yawright))
+                        end
+                    end
+
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "3-way" then
+                        if way == 0 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way1))
+                        end
+                        if way == 1 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way2))
+                        end
+                        if way == 2 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way3))
+                        end
+                    end
+
+
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "5-way" then
+                        if way == 0 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way1))
+                        end
+                        if way == 1 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way2))
+                        end
+                        if way == 2 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way3))
+                        end
+                        if way == 3 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way4))
+                        end
+                        if way == 4 then
+                            ui.set(refs.yaw[2], ui.get(menu.anti_aim[playerstate].defensive.way5))
+                        end
+                    end
+                    ui.set(refs.body_yaw[1], ui.get(menu.anti_aim[playerstate].defensive.bodyyaw))
+                    local byaw2
+                    if side == 0 then
+                        byaw2 = ui.get(menu.anti_aim[playerstate].defensive.bodyint) * 1
+                    end
+                    if side == 1 then
+                        byaw2 = ui.get(menu.anti_aim[playerstate].defensive.bodyint) * -1
+                    end
+                    if ui.get(menu.anti_aim[playerstate].defensive.yawadd) == "slowed" and ui.get(menu.anti_aim[playerstate].defensive.bodyyaw) == "jitter" then
+                        ui.set(refs.body_yaw[1], "static")
+
+                        ui.set(refs.body_yaw[2], byaw2)
+                    else
+                        ui.set(refs.body_yaw[2], ui.get(menu.anti_aim[playerstate].defensive.bodyint))
+                    end
+
+                    ui.set(refs.freestanding_body_yaw, ui.get(menu.anti_aim[playerstate].defensive.bodyfree))
+                end
+            end
+        end
+    }
+}
+
+local function aim_miss(e)
+    local group = hitgroup_names[e.hitgroup + 1] or "?"
+
+    log.add(string.format(
+        "Missed %s's %s due to %s",
+        entity.get_player_name(e.target), group, e.reason
+    ), 255, 125, 125, 255)
+end
+
+client.set_event_callback("aim_miss", aim_miss)
+local function aim_hit(e)
+    local group = hitgroup_names[e.hitgroup + 1] or "?"
+
+    log.add(string.format(
+        "Hit %s's in the %s for %d damage (%d health remaining)",
+        entity.get_player_name(e.target), group, e.damage,
+        entity.get_prop(e.target, "m_iHealth")
+    ), 150, 200, 60, 255)
+end
+
+client.set_event_callback("aim_hit", aim_hit)
+local function aim_fire(e)
+    local group = hitgroup_names[e.hitgroup + 1] or "?"
+    log.add(string.format(
+        "Fired at %s's %s for %d dmg (hc=%d%%, bt=%2d)",
+        entity.get_player_name(e.target), group, e.damage,
+        math.floor(e.hit_chance + 0.5), Math.time_to_ticks(e.backtrack)
+    ), 255, 255, 255, 255)
+end
+
+client.set_event_callback("aim_fire", aim_fire)
+client.set_event_callback("setup_command", function(cmd)
+    for k, v in pairs(callbacks.on_create_move) do
+        v(cmd)
     end
+end)
 
-function on_create_move()
-    OSFF()
-    randomdesync()
-    randomjitter()
-    randomcomp()
-end
-
-function on_shutdown()
-    limit:set_int(cache.backup)
-    desynccache:set_int(aacache.backup)
-    cacache:set_int(compcache.backup)
-    jitcache:set_int(jtcache.backup)
-end
-
-
-
-
-function on_paint()
-    MenuElements()
-    wm()
-    indic()
-end
-
-
-
-
-
+client.set_event_callback("paint", function()
+    for k, v in pairs(callbacks.on_paint) do
+        v()
+    end
+end)
 
